@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNP Care Pro | Health Analytics Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        * { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f8fafc; color: #1e293b; overflow: hidden; }
+        
+        /* สไตล์หน้า Login */
+        .auth-screen { position: fixed; inset: 0; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .auth-screen.hidden { display: none; }
+        .auth-card { background: white; border-radius: 2rem; padding: 3rem; width: 90%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        
+        /* โครงสร้างแอป */
+        .app-container { display: flex; height: 100vh; width: 100vw; }
+        .sidebar { width: 280px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+        .nav-item { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; color: #64748b; cursor: pointer; transition: 0.2s; border-radius: 0.75rem; margin: 0.25rem 1rem; }
+        .nav-item:hover { background: #f1f5f9; color: #4f46e5; }
+        .nav-item.active { background: #eef2ff; color: #4f46e5; font-weight: 600; }
+        
+        .main-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .content-area { flex: 1; overflow-y: auto; padding: 2rem; }
+        
+        /* สไตล์การ์ดและกราฟ */
+        .glass-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .metric-title { color: #64748b; font-size: 0.875rem; font-weight: 500; }
+        .metric-value { font-size: 2.25rem; font-weight: 800; color: #1e293b; line-height: 1; margin: 0.5rem 0; }
+        
+        /* Chat Style */
+        .chat-box { height: 500px; display: flex; flex-direction: column; background: white; border-radius: 1rem; border: 1px solid #e2e8f0; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+        .bubble { max-width: 80%; padding: 0.75rem 1rem; border-radius: 1rem; font-size: 0.95rem; }
+        .bubble.user { align-self: flex-end; background: #4f46e5; color: white; border-bottom-right-radius: 0.25rem; }
+        .bubble.bot { align-self: flex-start; background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 0.25rem; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal.active { display: flex; }
+        .section-hide { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen" class="auth-screen">
+        <div class="auth-card text-center">
+            <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <h1 class="text-2xl font-bold mb-2">PNP Care Pro</h1>
+            <p class="text-slate-500 mb-8">เข้าใช้งานแพลตฟอร์มสุขภาพของคุณ</p>
+            <form onsubmit="doLogin(event)">
+                <input type="text" id="user-name-input" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl mb-4 outline-none focus:border-indigo-500" placeholder="ระบุชื่อผู้ใช้งาน" required>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-4 rounded-2xl font-bold hover:bg-indigo-700 transition">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-ui" class="app-container hidden">
+        <aside class="sidebar">
+            <div class="p-8 pb-4">
+                <h2 class="text-xl font-black text-indigo-600 tracking-tight">PNP CARE PRO</h2>
+            </div>
+            <nav class="flex-1">
+                <div class="nav-item active" onclick="navTo('dashboard', event)"><i class="fas fa-th-large"></i> แดชบอร์ด</div>
+                <div class="nav-item" onclick="navTo('symptoms', event)"><i class="fas fa-file-medical"></i> บันทึกอาการ</div>
+                <div class="nav-item" onclick="navTo('goals', event)"><i class="fas fa-bullseye"></i> เป้าหมาย</div>
+                <div class="nav-item" onclick="navTo('reminders', event)"><i class="fas fa-clock"></i> การเตือน</div>
+                <div class="nav-item" onclick="navTo('chat', event)"><i class="fas fa-comment-dots"></i> ปรึกษา AI</div>
+            </nav>
+            <div class="p-6 border-t border-slate-100 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold" id="avatar">U</div>
+                <div>
+                    <div class="font-bold text-slate-800" id="display-name">User</div>
+                    <div class="text-xs text-green-500 font-medium">กำลังใช้งาน</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-view">
+            <header class="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8">
+                <h1 class="text-xl font-bold text-slate-800" id="header-title">แดชบอร์ด</h1>
+                <div class="flex gap-3">
+                    <button class="bg-indigo-50 text-indigo-600 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-100 transition" onclick="simulateScan()">
+                        <i class="fas fa-sync-alt mr-2"></i> สแกนด่วน
+                    </button>
+                    <button class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200" onclick="alert('กรุณาตั้งค่า IP Sensor ในโค้ดบรรทัดที่ 215')">
+                        <i class="fas fa-wifi mr-2"></i> เชื่อมต่อ Sensor
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <div id="view-dashboard" class="page-view">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="glass-card">
+                            <span class="metric-title">ความเครียดสะสม</span>
+                            <div class="metric-value text-indigo-600" id="val-stress">0%</div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div id="bar-stress" class="bg-indigo-500 h-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card">
+                            <span class="metric-title">ระดับน้ำในร่างกาย</span>
+                            <div class="metric-value text-cyan-500" id="val-water">0%</div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div id="bar-water" class="bg-cyan-400 h-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card">
+                            <span class="metric-title">พลังงานคงเหลือ</span>
+                            <div class="metric-value text-orange-500" id="val-energy">0%</div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div id="bar-energy" class="bg-orange-400 h-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card h-[450px]">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-slate-700">กราฟวิเคราะห์สุขภาพเชิงลึก</h3>
+                            <div class="text-xs text-slate-400">อัปเดตเรียลไทม์</div>
+                        </div>
+                        <canvas id="proChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="view-symptoms" class="page-view section-hide">
+                    <button class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold mb-6" onclick="showModal('mod-sym')">+ บันทึกอาการ</button>
+                    <div id="list-sym" class="grid gap-4"></div>
+                </div>
+                <div id="view-goals" class="page-view section-hide">
+                    <button class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold mb-6" onclick="showModal('mod-goal')">+ สร้างเป้าหมาย</button>
+                    <div id="list-goal" class="grid gap-4"></div>
+                </div>
+                <div id="view-reminders" class="page-view section-hide">
+                    <button class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold mb-6" onclick="showModal('mod-rem')">+ ตั้งการเตือน</button>
+                    <div id="list-rem" class="grid gap-4"></div>
+                </div>
+
+                <div id="view-chat" class="page-view section-hide">
+                    <div class="chat-box">
+                        <div id="chat-msgs" class="chat-messages"></div>
+                        <div class="p-4 border-t flex gap-3">
+                            <input type="text" id="chat-in" class="flex-1 bg-slate-50 p-4 rounded-xl outline-none focus:border-indigo-500 border border-transparent" placeholder="พิมพ์ข้อความปรึกษา AI..." onkeypress="if(event.key==='Enter') doChat()">
+                            <button onclick="doChat()" class="bg-indigo-600 text-white w-14 h-14 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="mod-sym" class="modal">
+        <div class="bg-white p-8 rounded-3xl w-full max-w-sm">
+            <h3 class="font-bold text-xl mb-4">บันทึกอาการ</h3>
+            <input type="text" id="in-sym-name" class="w-full p-4 bg-slate-50 border rounded-xl mb-4" placeholder="ระบุอาการ...">
+            <label class="text-sm text-slate-500">ความรุนแรง (1-10)</label>
+            <input type="range" id="in-sym-sev" min="1" max="10" class="w-full mb-6">
+            <div class="flex gap-3">
+                <button class="flex-1 p-4 bg-slate-100 rounded-xl font-bold" onclick="hideModal()">ยกเลิก</button>
+                <button class="flex-1 p-4 bg-indigo-600 text-white rounded-xl font-bold" onclick="saveData('symptoms')">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mod-goal" class="modal">
+        <div class="bg-white p-8 rounded-3xl w-full max-w-sm">
+            <h3 class="font-bold text-xl mb-4">ตั้งเป้าหมาย</h3>
+            <input type="text" id="in-goal-name" class="w-full p-4 bg-slate-50 border rounded-xl mb-6" placeholder="เช่น วิ่ง 30 นาที">
+            <div class="flex gap-3">
+                <button class="flex-1 p-4 bg-slate-100 rounded-xl font-bold" onclick="hideModal()">ยกเลิก</button>
+                <button class="flex-1 p-4 bg-indigo-600 text-white rounded-xl font-bold" onclick="saveData('goals')">สร้าง</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mod-rem" class="modal">
+        <div class="bg-white p-8 rounded-3xl w-full max-w-sm">
+            <h3 class="font-bold text-xl mb-4">ตั้งเวลาเตือน</h3>
+            <input type="text" id="in-rem-name" class="w-full p-4 bg-slate-50 border rounded-xl mb-4" placeholder="เตือนเรื่องอะไร?">
+            <input type="time" id="in-rem-time" class="w-full p-4 bg-slate-50 border rounded-xl mb-6">
+            <div class="flex gap-3">
+                <button class="flex-1 p-4 bg-slate-100 rounded-xl font-bold" onclick="hideModal()">ยกเลิก</button>
+                <button class="flex-1 p-4 bg-indigo-600 text-white rounded-xl font-bold" onclick="saveData('reminders')">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentU = "";
+        let chart = null;
+
+        // DB ENGINE
+        function getDB() {
+            const data = localStorage.getItem(`pnp_pro_${currentU}`);
+            return data ? JSON.parse(data) : { scans: [], symptoms: [], goals: [], reminders: [] };
+        }
+        function saveDB(data) { localStorage.setItem(`pnp_pro_${currentU}`, JSON.stringify(data)); }
+
+        // LOGIN
+        function doLogin(e) {
+            e.preventDefault();
+            currentU = document.getElementById('user-name-input').value;
+            document.getElementById('display-name').innerText = currentU;
+            document.getElementById('avatar').innerText = currentU[0].toUpperCase();
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-ui').classList.remove('hidden');
+            initChart();
+            loadAll();
+        }
+
+        // NAVIGATION
+        function navTo(page, e) {
+            document.querySelectorAll('.page-view').forEach(v => v.classList.add('section-hide'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.getElementById('view-' + page).classList.remove('section-hide');
+            if(e) e.currentTarget.classList.add('active');
+            document.getElementById('header-title').innerText = page.toUpperCase();
+        }
+
+        // CHART PRO VERSION
+        function initChart() {
+            const ctx = document.getElementById('proChart').getContext('2d');
+            
+            // สร้าง Gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, 400);
+            grad.addColorStop(0, 'rgba(79, 70, 229, 0.4)');
+            grad.addColorStop(1, 'rgba(79, 70, 229, 0)');
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ความเครียด (%)',
+                        data: [],
+                        borderColor: '#4f46e5',
+                        borderWidth: 4,
+                        backgroundColor: grad,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointHoverRadius: 10,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun' } } },
+                        x: { grid: { display: false }, ticks: { font: { family: 'Sarabun' } } }
+                    }
+                }
+            });
+            updateChartDisplay();
+        }
+
+        function updateChartDisplay() {
+            const db = getDB();
+            if(db.scans.length > 0 && chart) {
+                const latest = db.scans.slice(-10);
+                chart.data.labels = latest.map(d => d.t);
+                chart.data.datasets[0].data = latest.map(d => d.s);
+                chart.update('none');
+            }
+        }
+
+        // SIMULATE
+        function simulateScan() {
+            const s = Math.floor(Math.random() * 100);
+            const w = Math.floor(Math.random() * 100);
+            const e = Math.floor(Math.random() * 100);
+            const t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+
+            document.getElementById('val-stress').innerText = s + '%';
+            document.getElementById('bar-stress').style.width = s + '%';
+            document.getElementById('val-water').innerText = w + '%';
+            document.getElementById('bar-water').style.width = w + '%';
+            document.getElementById('val-energy').innerText = e + '%';
+            document.getElementById('bar-energy').style.width = e + '%';
+
+            const db = getDB();
+            db.scans.push({s, w, e, t});
+            saveDB(db);
+            updateChartDisplay();
+        }
+
+        // CRUD
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function hideModal() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); }
+
+        function saveData(type) {
+            const db = getDB();
+            let item = { id: Date.now() };
+            if(type==='symptoms') { item.name = document.getElementById('in-sym-name').value; item.sev = document.getElementById('in-sym-sev').value; }
+            if(type==='goals') { item.name = document.getElementById('in-goal-name').value; }
+            if(type==='reminders') { item.name = document.getElementById('in-rem-name').value; item.time = document.getElementById('in-rem-time').value; }
+            
+            db[type].unshift(item);
+            saveDB(db);
+            loadAll();
+            hideModal();
+        }
+
+        function loadAll() {
+            const db = getDB();
+            document.getElementById('list-sym').innerHTML = db.symptoms.map(i => `<div class="glass-card flex justify-between items-center"><div><b class="text-lg">${i.name}</b><br><span class="text-sm text-red-500 font-bold">ความรุนแรงระดับ ${i.sev}</span></div><button onclick="delItem('symptoms',${i.id})" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash"></i></button></div>`).join('');
+            document.getElementById('list-goal').innerHTML = db.goals.map(i => `<div class="glass-card flex justify-between items-center"><div class="flex items-center gap-3"><i class="fas fa-circle-check text-green-500 text-xl"></i><b class="text-lg">${i.name}</b></div><button onclick="delItem('goals',${i.id})" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash"></i></button></div>`).join('');
+            document.getElementById('list-rem').innerHTML = db.reminders.map(i => `<div class="glass-card flex justify-between items-center border-l-8 border-indigo-500"><div><b class="text-lg">${i.name}</b><br><span class="text-indigo-600 font-bold"><i class="far fa-clock mr-1"></i> ${i.time}</span></div><button onclick="delItem('reminders',${i.id})" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash"></i></button></div>`).join('');
+        }
+
+        function delItem(type, id) {
+            const db = getDB();
+            db[type] = db[type].filter(i => i.id !== id);
+            saveDB(db);
+            loadAll();
+        }
+
+        // CHAT
+        function doChat() {
+            const input = document.getElementById('chat-in');
+            const msg = input.value.trim();
+            if(!msg) return;
+
+            const box = document.getElementById('chat-msgs');
+            box.innerHTML += `<div class="bubble user">${msg}</div>`;
+            input.value = "";
+
+            setTimeout(() => {
+                let r = "ผมกำลังวิเคราะห์ข้อมูลสุขภาพของคุณอยู่ครับ มีอะไรให้ช่วยไหม?";
+                if(msg.includes("เครียด")) r = "จากกราฟล่าสุด ความเครียดของคุณอยู่ที่ " + document.getElementById('val-stress').innerText + " แนะนำให้พักสัก 10 นาทีครับ";
+                box.innerHTML += `<div class="bubble bot">${r}</div>`;
+                box.scrollTop = box.scrollHeight;
+            }, 600);
+        }
+    </script>
+</body>
+</html>
